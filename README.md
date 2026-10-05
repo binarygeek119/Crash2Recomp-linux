@@ -9,6 +9,9 @@ The PlayStation game *Crash Bandicoot 2: Cortex Strikes Back* translated to
 native code and run directly, rather than emulated. A launcher takes a disc
 image you already own, builds the game on your machine, and runs it.
 
+This repository is the **Linux port** of [Zumbo06/Crash2Recomp](https://github.com/Zumbo06/Crash2Recomp).
+Windows remains supported; Linux is the extra target.
+
 > **Work in progress.** The game is completable from start to finish, but there
 > are still minor sound and graphical issues. Treat this as a preview rather
 > than a finished release, and expect rough edges.
@@ -24,6 +27,7 @@ produced locally and never leaves your machine.
 | | |
 |---|---|
 | Windows | 64-bit, 10 or later |
+| Linux | 64-bit x86_64. Fedora, Ubuntu, and similar. |
 | A disc image you own | `.cue` with its `.bin` alongside, or a `.chd`. The build targets the North American release, serial `SCUS-94154`. |
 | Disk space | About 3 GB while building; roughly 100 MB once built |
 | Time | Five to twenty minutes for the first build, once |
@@ -33,12 +37,14 @@ included.
 
 ## Getting started
 
-1. Run the launcher.
-2. Open **Setup** and choose your disc image. It is checked for complete
+1. On Linux, run `_build/bootstrap_linux.sh` once. It fetches psxrecomp,
+   applies this port's patches, and builds the recompiler.
+2. Run the launcher (`python3 launcher/main.py` from this tree).
+3. Open **Setup** and choose your disc image. It is checked for complete
    tracks, whole sectors and the boot serial, then hashed.
-3. Press **Build the game**. This translates the game to C and compiles it.
+4. Press **Build the game**. This translates the game to C and compiles it.
    Live output appears below the progress bar.
-4. When it finishes, the **Play** page is ready.
+5. When it finishes, the **Play** page is ready.
 
 Settings apply on the next launch. If the game is already running, the Play
 page tells you to relaunch.
@@ -96,10 +102,10 @@ preset leaves all of it off; Enhanced turns on SMAA and light sharpening. The
 Home menu's **POST FX** row switches it on and off while you play, so you can
 compare.
 
-The renderer is OpenGL by default. **Direct3D 12** draws the same picture
-through Direct3D 12 - the same renderer built for the other API - for systems
-whose OpenGL driver misbehaves. If it cannot start, the log says so and the
-game runs on OpenGL.
+The renderer is OpenGL by default. On Windows, **Direct3D 12** draws the same
+picture through Direct3D 12 - the same renderer built for the other API - for
+systems whose OpenGL driver misbehaves. If it cannot start, the log says so
+and the game runs on OpenGL. Direct3D 12 is not offered on Linux.
 
 **Widescreen.** A 16:9 (or 14:9) *Gameplay aspect* widens the view. Crash 2's
 levels were made for 4:3, so the wider the view, the more objects and scenery
@@ -239,7 +245,41 @@ in others. Check where you live.
 
 ## Building from this repository
 
-The launcher is the supported route. Directly:
+The launcher is the supported route.
+
+### Linux
+
+```
+# Fedora
+sudo dnf install gcc gcc-c++ cmake ninja-build python3 python3-pyside6 git \
+  mesa-libGL-devel libX11-devel libXext-devel libXcursor-devel libXrandr-devel \
+  libXi-devel libXScrnSaver-devel libXtst-devel alsa-lib-devel pipewire-devel pulseaudio-libs-devel \
+  wayland-devel libxkbcommon-devel
+
+# Debian / Ubuntu
+sudo apt install build-essential cmake ninja-build python3 python3-pyside6 git \
+  libgl1-mesa-dev libx11-dev libxext-dev libxcursor-dev libxrandr-dev \
+  libxi-dev libxtst-dev libxss-dev libasound2-dev libpipewire-0.3-dev \
+  libpulse-dev libwayland-dev libxkbcommon-dev
+
+sh _build/bootstrap_linux.sh      # fetch psxrecomp, patch it, build the CLI
+python3 launcher/main.py          # needs Python 3.11+ and PySide6
+```
+
+Once a disc has been translated, `_build/build_clang.sh` rebuilds the runtime
+(both the release tree and the debug-tools tree). CMake fetches SDL3 if the
+system does not have it.
+
+Sound needs the audio development packages from the install lines above, and
+they must be present when the game is built: SDL3 is compiled as part of that
+build, and with no audio headers it compiles with only the disk and dummy
+audio drivers, so the game is silent. `pipewire-devel` is the native Fedora
+choice; `alsa-lib-devel` and `pulseaudio-libs-devel` add fallbacks. A game
+built without them stays silent until it is rebuilt - run
+`_build/fix_audio.sh`, which installs the packages and rebuilds.
+Direct3D 12 is not built on Linux.
+
+### Windows
 
 ```
 python launcher/main.py           # needs Python 3.11+ and PySide6

@@ -1,0 +1,4 @@
+#!/bin/sh
+# Run the collected launcher, not the PyInstaller intermediate in launcher/build/.
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec "$ROOT/launcher/dist/Crash2Launcher/Crash2Launcher" "$@"

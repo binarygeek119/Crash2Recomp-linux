@@ -15,7 +15,6 @@ from PySide6.QtCore import QTimer
 
 from PySide6.QtWidgets import (
     QCheckBox,
-    QFileDialog,
     QHBoxLayout,
     QLineEdit,
     QPushButton,
@@ -23,7 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .common import heading
+from .common import choose_save_file, heading
 from .dialogs import confirm, tell
 from .theme import PAGE_MARGINS
 from .widgets.log_console import LogConsole
@@ -117,7 +116,7 @@ class LogPage(QWidget):
             return
         default = str(Path.home() / ("crash2-log-%s.txt"
                                      % datetime.now().strftime("%Y%m%d-%H%M%S")))
-        chosen, _ = QFileDialog.getSaveFileName(
+        chosen = choose_save_file(
             self, "Save the log", default, "Text files (*.txt);;All files (*)")
         if not chosen:
             return
@@ -135,7 +134,7 @@ class LogPage(QWidget):
             return
         default = str(Path.home() / ("crash2-diagnostics-%s.json"
                                      % datetime.now().strftime("%Y%m%d-%H%M%S")))
-        chosen, _ = QFileDialog.getSaveFileName(
+        chosen = choose_save_file(
             self, "Save diagnostic report", default, "JSON files (*.json)")
         if not chosen:
             return

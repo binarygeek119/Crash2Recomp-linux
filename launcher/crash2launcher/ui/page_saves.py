@@ -18,7 +18,6 @@ from zipfile import BadZipFile
 from PySide6.QtCore import Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QImage, QPixmap
 from PySide6.QtWidgets import (
-    QFileDialog,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -32,7 +31,7 @@ from .. import saves
 from ..config import Settings
 from ..paths import Layout
 from ..runtime import GameSession
-from .common import card, dim, heading, row, section, set_status
+from .common import card, choose_open_file, dim, heading, row, section, set_status
 from .dialogs import confirm, tell
 from .theme import (BG_SUNKEN, BORDER, CARD_MARGINS, PAGE_MARGINS, SPACE_2,
                     SPACE_3, SPACE_4, TEXT_FAINT)
@@ -293,7 +292,7 @@ class SavesPage(QWidget):
         if self.session.running:
             return
         self._backups.mkdir(parents=True, exist_ok=True)
-        chosen, _ = QFileDialog.getOpenFileName(
+        chosen = choose_open_file(
             self, "Restore memory cards", str(self._backups),
             "Memory card backups (memcards-*.zip);;Zip files (*.zip)")
         if not chosen:
