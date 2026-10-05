@@ -21,6 +21,17 @@ from pathlib import Path
 
 _EXE_SUFFIX = ".exe" if sys.platform == "win32" else ""
 
+
+def find_tool(directory: Path, name: str) -> Path:
+    """``directory/name`` with a platform suffix, preferring a file that exists."""
+    preferred = directory / f"{name}{_EXE_SUFFIX}"
+    bare = directory / name
+    if preferred.is_file():
+        return preferred
+    if bare.is_file():
+        return bare
+    return preferred
+
 # The recompiled binary is named after the game by the generator
 # (e.g. Crash_Bandicoot_2_Recompiled.exe), and older//generic builds use
 # psx-runtime. Search rather than assume, most specific name first.
@@ -99,11 +110,24 @@ def app_dir() -> Path:
 
 
 def bundled_asset_dir() -> Path:
-    """Read-only assets shipped *inside* the frozen bundle (icons, QSS)."""
+    """Read-only assets shipped *inside* the frozen bundle (icons, QSS).
+
+    Frozen builds unpack datas next to the bootloader. A source checkout keeps
+    them under ``ui/assets``. Prefer whichever directory actually holds the
+    Play artwork, so a bundle that forgot the png still finds a local copy.
+    """
+    source = Path(__file__).resolve().parent / "ui" / "assets"
     meipass = getattr(sys, "_MEIPASS", None)
+    candidates = []
     if meipass:
-        return Path(meipass)
-    return Path(__file__).resolve().parent / "ui" / "assets"
+        candidates.append(Path(meipass))
+    candidates.append(source)
+    if is_frozen():
+        candidates.append(Path(sys.executable).resolve().parent)
+    for candidate in candidates:
+        if (candidate / "play-reference.png").is_file():
+            return candidate
+    return Path(meipass) if meipass else source
 
 
 @dataclass(frozen=True)
@@ -164,12 +188,21 @@ class Layout:
     def bios_rom(self) -> Path:
         """The BIOS image the recompiler needs in order to build a project.
 
-        `psxrecomp.exe build` requires --disc, --bios AND --output; the Setup
+        `psxrecomp build` requires --disc, --bios AND --output; the Setup
         page used to omit --bios and the build died on the usage message before
         doing anything. OpenBIOS ships inside the recompiler's own framework
-        tree, so it is always beside the CLI in both layouts.
+        tree. A source checkout and a staged CLI zip put it in different
+        places, so search rather than assume one layout.
         """
-        return self.cli_exe.parent / "framework" / "bios" / "openbios.bin"
+        candidates = (
+            self.cli_exe.parent / "framework" / "bios" / "openbios.bin",
+            self.project / "psxrecomp" / "bios" / "openbios.bin",
+            self.src_cli.parent / "bios" / "openbios.bin",
+        )
+        for candidate in candidates:
+            if candidate.is_file():
+                return candidate
+        return candidates[0]
 
     @property
     def runtime_include(self) -> Path:
@@ -294,13 +327,16 @@ def find_c_toolchain_bin(root: Path | None = None) -> Path | None:
     if (bundled / f"clang{_EXE_SUFFIX}").is_file():
         return bundled
 
-    pack = Path.home() / ".local" / "share" / "retcomm" / "toolchains" / "cmake-clang-v1"
-    if pack.is_dir():
-        # Newest version wins; the directory is named by semver.
-        for version in sorted(pack.iterdir(), reverse=True):
-            candidate = version / "bin"
-            if (candidate / f"clang{_EXE_SUFFIX}").is_file():
-                return candidate
+    # psxrecomp's pinned pack is the Windows MinGW clang. On Linux it would
+    # either be absent or a cross compiler, so only consult it on Windows.
+    if sys.platform == "win32":
+        pack = Path.home() / ".local" / "share" / "retcomm" / "toolchains" / "cmake-clang-v1"
+        if pack.is_dir():
+            # Newest version wins; the directory is named by semver.
+            for version in sorted(pack.iterdir(), reverse=True):
+                candidate = version / "bin"
+                if (candidate / f"clang{_EXE_SUFFIX}").is_file():
+                    return candidate
 
     for name in (f"clang{_EXE_SUFFIX}", f"gcc{_EXE_SUFFIX}", f"cc{_EXE_SUFFIX}"):
         found = shutil.which(name)
@@ -343,7 +379,7 @@ def detect(root: Path | None = None) -> Layout:
             build_dir=project / "build",
             # The recompiler ships in its own folder so its framework/ tree
             # cannot be mistaken for the generated project.
-            cli_exe=root / "recompiler" / "psxrecomp.exe",
+            cli_exe=find_tool(root / "recompiler", "psxrecomp"),
             src_cli=root / "recompiler" / "psxrecomp_cli.py",
         )
 
@@ -360,6 +396,6 @@ def detect(root: Path | None = None) -> Layout:
         disc_data=project / "input",
         userdata=root / "launcher" / "userdata",
         build_dir=project / "build-clang",
-        cli_exe=build / "psxrecomp-cli" / "psxrecomp.exe",
+        cli_exe=find_tool(build / "psxrecomp-cli", "psxrecomp"),
         src_cli=build / "psxrecomp-src" / "psxrecomp_cli.py",
     )

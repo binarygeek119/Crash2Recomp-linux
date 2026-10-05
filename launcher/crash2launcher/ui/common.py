@@ -8,8 +8,11 @@ pixel value.
 
 from __future__ import annotations
 
+import sys
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -19,6 +22,49 @@ from PySide6.QtWidgets import (
 )
 
 from .theme import CARD_MARGINS, LABEL_COL, PAGE_MARGINS, SPACE_2, SPACE_3, SPACE_4
+
+
+def _file_dialog(parent: QWidget | None, title: str, start: str,
+                 file_filter: str, mode: QFileDialog.FileMode,
+                 accept: QFileDialog.AcceptMode = QFileDialog.AcceptMode.AcceptOpen,
+                 ) -> str:
+    """Open a file dialog that actually appears on Linux.
+
+    The static helpers use the desktop portal. From this frozen launcher the
+    portal returns at once with no file, so Browse looks dead. Qt's own dialog
+    does not need the portal.
+    """
+    host = parent.window() if parent is not None else None
+    dialog = QFileDialog(host, title, start, file_filter)
+    dialog.setFileMode(mode)
+    dialog.setAcceptMode(accept)
+    dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
+    if sys.platform != "win32":
+        dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
+    if mode == QFileDialog.FileMode.Directory:
+        dialog.setOption(QFileDialog.Option.ShowDirsOnly, True)
+    if dialog.exec() != QFileDialog.DialogCode.Accepted:
+        return ""
+    files = dialog.selectedFiles()
+    return files[0] if files else ""
+
+
+def choose_open_file(parent: QWidget | None, title: str, start: str,
+                     file_filter: str) -> str:
+    return _file_dialog(parent, title, start, file_filter,
+                        QFileDialog.FileMode.ExistingFile)
+
+
+def choose_save_file(parent: QWidget | None, title: str, start: str,
+                     file_filter: str) -> str:
+    return _file_dialog(parent, title, start, file_filter,
+                        QFileDialog.FileMode.AnyFile,
+                        QFileDialog.AcceptMode.AcceptSave)
+
+
+def choose_directory(parent: QWidget | None, title: str, start: str) -> str:
+    return _file_dialog(parent, title, start, "",
+                        QFileDialog.FileMode.Directory)
 
 
 def card(*children: QWidget, spacing: int = SPACE_3, tone: str = "") -> QFrame:

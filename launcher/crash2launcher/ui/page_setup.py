@@ -18,11 +18,11 @@ both of which already exist and are tested.
 from __future__ import annotations
 
 import shutil
+import sys
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, QThread, Signal
 from PySide6.QtWidgets import (
-    QFileDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -38,7 +38,7 @@ from ..config import Settings
 from ..paths import Layout
 from ..pipeline import EXIT_DISC_VERIFY_FAILED, Job
 from ..runtime import toolchain_env
-from .common import card, dim, heading, section, set_status
+from .common import card, choose_open_file, dim, heading, section, set_status
 from .dialogs import confirm
 from .theme import ERROR, OK, PAGE_MARGINS, TEXT_DIM, WARN
 from .widgets.log_console import LogConsole
@@ -172,7 +172,7 @@ class SetupPage(QWidget):
     def _browse(self) -> None:
         start = (str(Path(self.settings.disc_path).parent)
                  if self.settings.disc_path else str(Path.home()))
-        chosen, _ = QFileDialog.getOpenFileName(
+        chosen = choose_open_file(
             self, "Select your disc image", start,
             "Disc images (*.cue *.chd);;Cue sheets (*.cue);;All files (*)")
         if chosen:
@@ -301,10 +301,14 @@ class SetupPage(QWidget):
 
     def _on_build(self) -> None:
         if not self.layout_.cli_exe.is_file():
+            hint = (
+                " Run _build/bootstrap_linux.sh first to fetch and build it."
+                if sys.platform != "win32" else
+                " If the download is incomplete, unpack it again."
+            )
             set_status(self.build_note, "Error",
-                       "The recompiler is missing. It should sit next to this "
-                       "launcher at %s - if the download is incomplete, "
-                       "unpack it again." % self.layout_.cli_exe)
+                       "The recompiler is missing. It should sit at %s.%s"
+                       % (self.layout_.cli_exe, hint))
             return
         if not self._disc_ok:
             set_status(self.build_note, "Warn", "Select a valid disc first.")
@@ -360,12 +364,13 @@ class SetupPage(QWidget):
         except UnicodeEncodeError:
             offenders = "".join(sorted({c for c in str(self.layout_.project)
                                         if ord(c) > 127}))
+            example = r"C:\Games\Crash2" if sys.platform == "win32" else "/home/you/Games/Crash2"
             set_status(self.build_note, "Error",
                        "The folder path contains characters the recompiler "
                        "cannot read (%s). Move this folder somewhere with a "
-                       "plain English path, like C:\\Games\\Crash2, and try "
+                       "plain English path, like %s, and try "
                        "again. Your saves and settings move with it."
-                       % offenders)
+                       % (offenders, example))
             self.steps.set_state("generate", FAILED, "path has non-English characters")
             return
 
@@ -373,18 +378,20 @@ class SetupPage(QWidget):
         # and the deepest file in it (rabbitizer's instruction tables) is ~140
         # characters on its own. Past 260 total the copy fails with a bare
         # "cannot copy: No such file or directory" naming a path that plainly
-        # exists - so check first and say what is actually wrong.
-        DEEPEST_RELATIVE = 150
-        room = 260 - len(str(self.layout_.project))
-        if room < DEEPEST_RELATIVE:
-            set_status(self.build_note, "Error",
-                       "The folder path is too long for Windows to build in "
-                       "(%d characters, and the build needs about %d more). "
-                       "Move this folder somewhere shorter, like C:\\Games\\, "
-                       "and try again."
-                       % (len(str(self.layout_.project)), DEEPEST_RELATIVE))
-            self.steps.set_state("generate", FAILED, "path too long")
-            return
+        # exists - so check first and say what is actually wrong. Linux has no
+        # such 260-character ceiling.
+        if sys.platform == "win32":
+            DEEPEST_RELATIVE = 150
+            room = 260 - len(str(self.layout_.project))
+            if room < DEEPEST_RELATIVE:
+                set_status(self.build_note, "Error",
+                           "The folder path is too long for Windows to build in "
+                           "(%d characters, and the build needs about %d more). "
+                           "Move this folder somewhere shorter, like C:\\Games\\, "
+                           "and try again."
+                           % (len(str(self.layout_.project)), DEEPEST_RELATIVE))
+                self.steps.set_state("generate", FAILED, "path too long")
+                return
 
         # --bios is REQUIRED by the recompiler, not optional. Omitting it made
         # the build exit on the usage message without touching the disc.
@@ -466,28 +473,35 @@ class SetupPage(QWidget):
         self.steps.set_state("generate", DONE)
         self.steps.set_state("compile", ACTIVE)
 
-        script = self.layout_.project / "build.ps1"
+        if sys.platform == "win32":
+            script = self.layout_.project / "build.ps1"
+            program, args = "powershell", [
+                "-ExecutionPolicy", "Bypass", "-File", str(script)]
+        else:
+            script = self.layout_.project / "build.sh"
+            program, args = "sh", [str(script)]
         if not script.is_file():
             self.steps.set_state("compile", FAILED, "build script missing")
             self._finish_build(False, "No build script at %s" % script, 1)
             return
 
-        # cmake/ninja/clang must be on PATH for build.ps1, and the PINNED pack
-        # must come first - a pip-installed cmake shim ahead of it is enough to
-        # break the build. Without this the job inherited a bare environment.
+        # cmake/ninja and a C compiler must be on PATH. On Windows the PINNED
+        # pack must come first - a pip-installed cmake shim ahead of it is
+        # enough to break the build. Without this the job inherited a bare
+        # environment.
         env = toolchain_env(self.layout_.root)
         if not env:
             set_status(self.build_note, "Error",
-                       "No C toolchain was found. The build needs clang, cmake "
-                       "and ninja. Install psxrecomp's toolchain pack, or put "
-                       "them on PATH, then try again.")
+                       "No C toolchain was found. The build needs a C compiler, "
+                       "cmake and ninja. Install them (or psxrecomp's toolchain "
+                       "pack on Windows), then try again.")
             self.steps.set_state("compile", FAILED, "no toolchain")
             self._finish_build(False, "No C compiler toolchain on this machine.", 1)
             return
 
         self._job = Job(
-            "powershell",
-            ["-ExecutionPolicy", "Bypass", "-File", str(script)],
+            program,
+            args,
             cwd=self.layout_.project,
             env_extra=env,
         )

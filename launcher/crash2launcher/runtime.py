@@ -366,14 +366,16 @@ def overlay_autocompile_cmd(layout: Layout) -> str:
 def toolchain_env(root: Path | None = None) -> dict[str, str]:
     """Environment for the COMPILE step of the first-run build.
 
-    build.ps1 runs `cmake -G Ninja` and needs cmake, ninja and a C/C++ compiler.
-    The Setup page used to launch it with no environment at all, so it inherited
-    whatever the player happened to have - which on a clean machine is nothing,
-    and on a developer machine can be worse than nothing: a pip-installed cmake
-    shim ahead of the pinned one, or a compiler that does not match the runtime.
+    The generated build script runs `cmake -G Ninja` and needs cmake, ninja and
+    a C/C++ compiler. The Setup page used to launch it with no environment at
+    all, so it inherited whatever the player happened to have - which on a
+    clean machine is nothing, and on a developer machine can be worse than
+    nothing: a pip-installed cmake shim ahead of the pinned one, or a compiler
+    that does not match the runtime.
 
-    Put psxrecomp's own pinned clang/MinGW pack FIRST on PATH and name the
-    compilers explicitly, exactly as _build/build_clang.ps1 does. Returns an
+    On Windows, put psxrecomp's own pinned clang/MinGW pack FIRST on PATH and
+    name the compilers explicitly, exactly as _build/build_clang.ps1 does. On
+    Linux/macOS, prefer the host clang/gcc the bootstrap used. Returns an
     empty dict when no toolchain is found, so the caller can say so plainly
     rather than failing three minutes into cmake.
     """
@@ -381,11 +383,22 @@ def toolchain_env(root: Path | None = None) -> dict[str, str]:
     if not toolchain:
         return {}
     env = {"PATH": str(toolchain) + os.pathsep + os.environ.get("PATH", "")}
-    for var, exe in (("CC", "x86_64-w64-mingw32-clang"),
-                     ("CXX", "x86_64-w64-mingw32-clang++")):
-        candidate = toolchain / (exe + (".exe" if sys.platform == "win32" else ""))
-        if candidate.is_file():
-            env[var] = str(candidate)
+    if sys.platform == "win32":
+        compilers: tuple[tuple[str, tuple[str, ...]], ...] = (
+            ("CC", ("x86_64-w64-mingw32-clang",)),
+            ("CXX", ("x86_64-w64-mingw32-clang++",)),
+        )
+    else:
+        compilers = (
+            ("CC", ("clang", "gcc", "cc")),
+            ("CXX", ("clang++", "g++", "c++")),
+        )
+    for var, names in compilers:
+        for name in names:
+            candidate = toolchain / (name + (".exe" if sys.platform == "win32" else ""))
+            if candidate.is_file():
+                env[var] = str(candidate)
+                break
     return env
 
 

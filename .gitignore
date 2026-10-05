@@ -84,6 +84,7 @@ toolchain/
 # each parent directory has to be re-included before its children.)
 _build/*
 !_build/*.ps1
+!_build/*.sh
 !_build/*.py
 !_build/padprobe.c
 # Widescreen investigation probes (ws_census, ws_send, wsdiag, ...). Throwaway

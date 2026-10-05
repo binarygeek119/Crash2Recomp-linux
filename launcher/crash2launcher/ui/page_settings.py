@@ -12,6 +12,8 @@ from a quality option.
 
 from __future__ import annotations
 
+import sys
+
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -350,11 +352,16 @@ class SettingsPage(QWidget):
         self.renderer = self._combo(
             [(RENDERER_LABELS.get(r, r), r) for r in SELECTABLE_RENDERERS],
             self.settings.renderer, self._on_renderer)
-        self.renderer.setToolTip(
-            "OpenGL: the default, most tested.\n\nDirect3D 12: the same "
-            "renderer on Direct3D 12. Try it if OpenGL misbehaves; it falls "
-            "back to OpenGL if it can't start.\n\nSoftware: slow, native "
-            "resolution only.")
+        if sys.platform == "win32":
+            self.renderer.setToolTip(
+                "OpenGL: the default, most tested.\n\nDirect3D 12: the same "
+                "renderer on Direct3D 12. Try it if OpenGL misbehaves; it falls "
+                "back to OpenGL if it can't start.\n\nSoftware: slow, native "
+                "resolution only.")
+        else:
+            self.renderer.setToolTip(
+                "OpenGL: the default, most tested.\n\nSoftware: slow, native "
+                "resolution only. Direct3D 12 is Windows-only.")
 
         self.scale = QComboBox()
         for n in range(1, MAX_SUPERSAMPLING + 1):

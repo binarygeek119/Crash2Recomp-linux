@@ -22,7 +22,6 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
-    QFileDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -35,7 +34,10 @@ from PySide6.QtWidgets import (
 
 from .. import mods
 from ..paths import Layout
-from .common import card, dim, heading, row, section, set_status, warn
+from .common import (
+    card, choose_directory, choose_open_file, dim, heading, row, section,
+    set_status, warn,
+)
 from .dialogs import confirm, tell
 from .theme import PAGE_MARGINS, SPACE_2, SPACE_4
 
@@ -328,10 +330,9 @@ class ModsPage(QWidget):
                          resource: mods.Resource, edit: QLineEdit) -> None:
         start = edit.text() or str(Path.home())
         if resource.wants_directory:
-            chosen = QFileDialog.getExistingDirectory(
-                self, resource.label, start)
+            chosen = choose_directory(self, resource.label, start)
         else:
-            chosen, _ = QFileDialog.getOpenFileName(
+            chosen = choose_open_file(
                 self, resource.label, start, resource.qt_filter())
         if not chosen:
             return
@@ -356,7 +357,7 @@ class ModsPage(QWidget):
         self._save()
 
     def _install(self) -> None:
-        chosen, _ = QFileDialog.getOpenFileName(
+        chosen = choose_open_file(
             self, "Install a mod package", str(Path.home()),
             "Mod packages (*.psxmod *.zip);;All files (*)")
         if not chosen:

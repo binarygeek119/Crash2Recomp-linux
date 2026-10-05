@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 import tempfile
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
@@ -42,16 +43,20 @@ RENDERERS = ("opengl", "d3d12", "vulkan", "software")
 # It was labelled experimental until it had held up in real play; OpenGL stays
 # the default, and if Direct3D 12 cannot start the runtime falls back to OpenGL
 # on its own.
-SELECTABLE_RENDERERS = ("opengl", "d3d12", "software")
+# Direct3D 12 is Windows-only. Offering it on Linux would write a backend the
+# runtime cannot start, then look like a launch failure.
+if sys.platform == "win32":
+    SELECTABLE_RENDERERS = ("opengl", "d3d12", "software")
+    HARDWARE_RENDERERS = ("opengl", "d3d12")
+else:
+    SELECTABLE_RENDERERS = ("opengl", "software")
+    HARDWARE_RENDERERS = ("opengl",)
 RENDERER_LABELS = {
     "opengl": "OpenGL",
     "d3d12": "Direct3D 12",
     "vulkan": "Vulkan",
     "software": "Software",
 }
-# Renderers that are the hardware path: presentation features (frame blending,
-# post-processing, bezels, native widescreen) exist only on these.
-HARDWARE_RENDERERS = ("opengl", "d3d12")
 # 14:9 is the useful middle: it widens the field of view by ~1.17x instead of
 # 16:9's ~1.33x, so it reaches only about half as far past the edge Crash 2's
 # levels were actually authored to - which is where scenery pops in and out.

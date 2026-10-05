@@ -1,0 +1,22 @@
+Linux: gpu_gl_postfx.c's shader linker was named `link`, which collides
+with POSIX link(2) once unistd.h is pulled in through zlib. Windows never
+sees that declaration. Rename the static helper.
+
+--- a/runtime/src/gpu_gl_postfx.c
++++ b/runtime/src/gpu_gl_postfx.c
+@@ -466,7 +466,8 @@
+     return s;
+ }
+ 
+-static GLuint link(const char *vs, const char *fs) {
++/* Not `link`: that name is POSIX link(2) once unistd.h is visible. */
++static GLuint link_shaders(const char *vs, const char *fs) {
+     GLuint v = compile(PFX_VERTEX_SHADER, vs), f = compile(PFX_FRAGMENT_SHADER, fs);
+     if (!v || !f) { if (v) f_DeleteShader(v); if (f) f_DeleteShader(f); return 0; }
+     GLuint p = f_CreateProgram();
+@@ -529,7 +530,7 @@
+         if (s_prog[progs[i].id]) continue;
+-        s_prog[progs[i].id] = link(*progs[i].vs, *progs[i].fs);
++        s_prog[progs[i].id] = link_shaders(*progs[i].vs, *progs[i].fs);
+         if (!s_prog[progs[i].id]) return;
+     }
